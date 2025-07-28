@@ -1,5 +1,5 @@
 import puppeteer, { Browser, Page } from "puppeteer";
-import fetch from "node-fetch";
+import fetch, { Response } from "node-fetch";
 import { logger } from "../config/logger.js";
 import { dockerConfig, npxConfig, DEFAULT_NAVIGATION_TIMEOUT } from "../config/browser.js";
 import { ActiveTab } from "../types/global.js";
@@ -26,20 +26,46 @@ export async function ensureBrowser(): Promise<Page> {
   return page!;
 }
 
-export async function getDebuggerWebSocketUrl(port: number = 9222): Promise<string> {
+async function tryFetch(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1000); // 1 second timeout
+  
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/json/version`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch debugger info: ${response.statusText}`);
-    }
-    const data = await response.json() as any;
-    if (!data.webSocketDebuggerUrl) {
-      throw new Error("No WebSocket debugger URL found. Is Chrome running with --remote-debugging-port?");
-    }
-    return data.webSocketDebuggerUrl;
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    return response;
   } catch (error) {
-    throw new Error(`Failed to connect to Chrome debugging port ${port}: ${(error as Error).message}`);
+    clearTimeout(timeout);
+    throw error;
   }
+}
+
+export async function getDebuggerWebSocketUrl(port: number = 9222): Promise<string> {
+  const urls = [
+    `http://127.0.0.1:${port}/json/version`, // IPv4 first (usually faster)
+    `http://localhost:${port}/json/version`  // Falls back to system resolver
+  ];
+  
+  let lastError: Error | null = null;
+  
+  for (const url of urls) {
+    try {
+      const response = await tryFetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch debugger info: ${response.statusText}`);
+      }
+      const data = await response.json() as any;
+      if (!data.webSocketDebuggerUrl) {
+        throw new Error("No WebSocket debugger URL found. Is Chrome running with --remote-debugging-port?");
+      }
+      return data.webSocketDebuggerUrl;
+    } catch (error) {
+      lastError = error as Error;
+      continue; // Try next URL
+    }
+  }
+  
+  throw new Error(`Failed to connect to Chrome debugging port ${port}: ${lastError?.message}`);
 }
 
 export async function connectToExistingBrowser(
