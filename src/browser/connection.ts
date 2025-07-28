@@ -1,4 +1,5 @@
 import puppeteer, { Browser, Page } from "puppeteer";
+import fetch from "node-fetch";
 import { logger } from "../config/logger.js";
 import { dockerConfig, npxConfig, DEFAULT_NAVIGATION_TIMEOUT } from "../config/browser.js";
 import { ActiveTab } from "../types/global.js";
@@ -27,11 +28,11 @@ export async function ensureBrowser(): Promise<Page> {
 
 export async function getDebuggerWebSocketUrl(port: number = 9222): Promise<string> {
   try {
-    const response = await fetch(`http://localhost:${port}/json/version`);
+    const response = await fetch(`http://127.0.0.1:${port}/json/version`);
     if (!response.ok) {
       throw new Error(`Failed to fetch debugger info: ${response.statusText}`);
     }
-    const data = await response.json();
+    const data = await response.json() as any;
     if (!data.webSocketDebuggerUrl) {
       throw new Error("No WebSocket debugger URL found. Is Chrome running with --remote-debugging-port?");
     }
