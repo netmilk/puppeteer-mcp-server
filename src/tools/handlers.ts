@@ -1,6 +1,7 @@
 import { CallToolResult, TextContent, ImageContent } from "@modelcontextprotocol/sdk/types.js";
 import { logger } from "../config/logger.js";
 import { BrowserState } from "../types/global.js";
+import { Page } from "puppeteer";
 import { 
   ensureBrowser, 
   getDebuggerWebSocketUrl, 
@@ -17,7 +18,12 @@ export async function handleToolCall(
   server: Server
 ): Promise<CallToolResult> {
   logger.debug('Tool call received', { tool: name, arguments: args });
-  const page = await ensureBrowser();
+  
+  // Only ensure browser for non-connect operations
+  let page: Page | undefined;
+  if (name !== "puppeteer_connect_active_tab") {
+    page = await ensureBrowser();
+  }
 
   switch (name) {
     case "puppeteer_connect_active_tab":
@@ -64,6 +70,15 @@ export async function handleToolCall(
       }
 
     case "puppeteer_navigate":
+      if (!page) {
+        return {
+          content: [{
+            type: "text",
+            text: "No browser connection available. Please connect to a browser first using puppeteer_connect_active_tab.",
+          }],
+          isError: true,
+        };
+      }
       try {
         logger.info('Navigating to URL', { url: args.url });
         const response = await page.goto(args.url, {
@@ -101,6 +116,15 @@ export async function handleToolCall(
       }
 
     case "puppeteer_screenshot": {
+      if (!page) {
+        return {
+          content: [{
+            type: "text",
+            text: "No browser connection available. Please connect to a browser first using puppeteer_connect_active_tab.",
+          }],
+          isError: true,
+        };
+      }
       const width = args.width ?? 800;
       const height = args.height ?? 600;
       await page.setViewport({ width, height });
@@ -139,6 +163,15 @@ export async function handleToolCall(
     }
 
     case "puppeteer_click":
+      if (!page) {
+        return {
+          content: [{
+            type: "text",
+            text: "No browser connection available. Please connect to a browser first using puppeteer_connect_active_tab.",
+          }],
+          isError: true,
+        };
+      }
       try {
         await page.click(args.selector);
         return {
@@ -159,6 +192,15 @@ export async function handleToolCall(
       }
 
     case "puppeteer_fill":
+      if (!page) {
+        return {
+          content: [{
+            type: "text",
+            text: "No browser connection available. Please connect to a browser first using puppeteer_connect_active_tab.",
+          }],
+          isError: true,
+        };
+      }
       try {
         await page.waitForSelector(args.selector);
         await page.type(args.selector, args.value);
@@ -180,6 +222,15 @@ export async function handleToolCall(
       }
 
     case "puppeteer_select":
+      if (!page) {
+        return {
+          content: [{
+            type: "text",
+            text: "No browser connection available. Please connect to a browser first using puppeteer_connect_active_tab.",
+          }],
+          isError: true,
+        };
+      }
       try {
         await page.waitForSelector(args.selector);
         await page.select(args.selector, args.value);
@@ -201,6 +252,15 @@ export async function handleToolCall(
       }
 
     case "puppeteer_hover":
+      if (!page) {
+        return {
+          content: [{
+            type: "text",
+            text: "No browser connection available. Please connect to a browser first using puppeteer_connect_active_tab.",
+          }],
+          isError: true,
+        };
+      }
       try {
         await page.waitForSelector(args.selector);
         await page.hover(args.selector);
@@ -222,6 +282,15 @@ export async function handleToolCall(
       }
 
     case "puppeteer_evaluate":
+      if (!page) {
+        return {
+          content: [{
+            type: "text",
+            text: "No browser connection available. Please connect to a browser first using puppeteer_connect_active_tab.",
+          }],
+          isError: true,
+        };
+      }
       try {
         // Set up console listener
         const logs: string[] = [];

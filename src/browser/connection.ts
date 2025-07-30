@@ -1,7 +1,7 @@
 import puppeteer, { Browser, Page } from "puppeteer";
 import fetch, { Response } from "node-fetch";
 import { logger } from "../config/logger.js";
-import { dockerConfig, npxConfig, DEFAULT_NAVIGATION_TIMEOUT } from "../config/browser.js";
+import { DEFAULT_NAVIGATION_TIMEOUT } from "../config/browser.js";
 import { ActiveTab } from "../types/global.js";
 
 // Global browser instance
@@ -10,18 +10,21 @@ let page: Page | undefined;
 
 export async function ensureBrowser(): Promise<Page> {
   if (!browser) {
-    logger.info('Launching browser with config:', process.env.DOCKER_CONTAINER ? 'docker' : 'npx');
-    browser = await puppeteer.launch(process.env.DOCKER_CONTAINER ? dockerConfig : npxConfig);
-    const pages = await browser.pages();
-    page = pages[0];
-
-    // Set default navigation timeout
-    await page.setDefaultNavigationTimeout(DEFAULT_NAVIGATION_TIMEOUT);
-    
-    // Enable JavaScript
-    await page.setJavaScriptEnabled(true);
-    
-    logger.info('Browser launched successfully');
+    // Try to connect to existing browser first on default port
+    try {
+      logger.info('Attempting to connect to existing Chrome browser on port 9222');
+      const wsEndpoint = await getDebuggerWebSocketUrl(9222);
+      const connectedPage = await connectToExistingBrowser(wsEndpoint);
+      logger.info('Successfully connected to existing Chrome browser');
+      return connectedPage;
+    } catch (error) {
+      logger.error('Failed to connect to existing browser:', (error as Error).message);
+      throw new Error(
+        'No existing Chrome browser with remote debugging found. ' +
+        'Please start Chrome with --remote-debugging-port=9222 and try again. ' +
+        'This server no longer launches its own browser instances.'
+      );
+    }
   }
   return page!;
 }
